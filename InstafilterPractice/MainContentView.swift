@@ -7,12 +7,14 @@ import SwiftUI
 struct MainContentView: View {
     @Environment(\.requestReview) var requestReview
     @State private var filterIntensity: Double = 0.5
+    @State private var filterRadius: Double = 0.5
     @State private var image: Image?
     @State private var photoPickerItem: PhotosPickerItem?
     @State private var currentFilter: CIFilter = CIFilter.sepiaTone()
     @State private var loadedCIImage: CIImage?
     @State private var isChangeFilterConfirmationPresented: Bool = false
     @AppStorage("changeFilterCount") private var changeFilterCount: Int = 0
+    private let ciContext = CIContext()
     var body: some View {
         NavigationStack {
             VStack {
@@ -25,12 +27,13 @@ struct MainContentView: View {
                             .resizable()
                             .scaledToFit()
                             .clipShape(.rect(cornerRadius: 12.0))
+                            .transition(.asymmetric(insertion: .scale, removal: .opacity))
                     } else {
                         ContentUnavailableView(
                             "No picture",
                             systemImage: "photo.badge.plus",
                             description: Text("Tap to import a picture.")
-                        )
+                        ).transition(.asymmetric(insertion: .scale, removal: .opacity))
                     }
                 }.buttonStyle(.plain)
                     .onChange(of: photoPickerItem) {
@@ -46,12 +49,24 @@ struct MainContentView: View {
                             .onChange(of: filterIntensity) {
                                 applyFilter()
                             }
+                            .disabled(image == nil)
+                    }
+                    HStack {
+                        Text("Radius")
+                            .font(.body.weight(.semibold))
+                        Slider(value: $filterRadius, in: 0...1)
+                            .tint(.mint)
+                            .onChange(of: filterRadius) {
+                                applyFilter()
+                            }
+                            .disabled(image == nil)
                     }
                     VStack(spacing: 12) {
                         Button("Change Filter", action: changeFilter)
                             .buttonStyle(.borderedProminent)
                             .tint(.mint)
                             .foregroundStyle(.white)
+                            .disabled(image == nil)
                         if let image {
                             ShareLink(
                                 item: image,
@@ -59,6 +74,7 @@ struct MainContentView: View {
                             ).buttonStyle(.bordered)
                                 .tint(.mint)
                                 .foregroundStyle(.mint)
+                                .transition(.scale)
                         }
                     }
                 }
@@ -128,20 +144,22 @@ struct MainContentView: View {
         if inputKeys.contains(kCIInputIntensityKey) {
             currentFilter.setValue(filterIntensity, forKey: kCIInputIntensityKey)
         }
-        if inputKeys.contains(kCIInputRadiusKey) {
-            currentFilter.setValue(filterIntensity * 200, forKey: kCIInputRadiusKey)
-        }
         if inputKeys.contains(kCIInputScaleKey) {
             currentFilter.setValue(filterIntensity * 10, forKey: kCIInputScaleKey)
+        }
+        if inputKeys.contains(kCIInputRadiusKey) {
+            currentFilter.setValue(filterRadius * 200, forKey: kCIInputRadiusKey)
         }
         guard let ciImage = currentFilter.outputImage else {
             return
         }
-        guard let cgImage = CIContext().createCGImage(ciImage, from: ciImage.extent) else {
+        guard let cgImage = ciContext.createCGImage(ciImage, from: ciImage.extent) else {
             return
         }
         let uiImage = UIImage(cgImage: cgImage)
-        image = Image(uiImage: uiImage)
+        withAnimation {
+            image = Image(uiImage: uiImage)
+        }
     }
     private func setFilter(_ filter: CIFilter) {
         currentFilter = filter
